@@ -20,3 +20,5 @@ Checkers AI: an ode to Arthur Samuel
  `game.py`
  
      This file contains the harness for running an actual game of checkers.
+
+> Written with [StackEdit](https://stackedit.io/).
