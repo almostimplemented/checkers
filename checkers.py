@@ -4,10 +4,7 @@
 #
 # Last updated: July 21, 2014
 
-# Constants for colors and board positions
-FORE_RED = '\033[31m\033[1m'
-FORE_BLUE = '\033[34m\033[1m'
-DEF_FONT = '\033[39m\033[22m'
+# Constants for board positions
 EMPTY, RED, RED_KING, BLUE, BLUE_KING = range(5)
 
 class CheckerBoard:
@@ -127,7 +124,7 @@ class CheckerBoard:
             Has precondition that the move is of the form:
                         (x, y, x +/- 2, y +/- 2)
         """
-        (rowOld, colOld, rowNew, colNew) = move
+        rowOld, colOld, rowNew, colNew = move
 
         rowJumped = (rowOld + rowNew) / 2
         colJumped = (colOld + colNew) / 2
@@ -160,7 +157,7 @@ class CheckerBoard:
             Has precondition that the move is of the form:
                         (x, y, x +/- 1, y +/- 1)
         """
-        (rowOld, colOld, rowNew, colNew) = move
+        rowOld, colOld, rowNew, colNew = move
 
         if rowNew < 0 or rowNew > 7 or colNew < 0 or colNew > 7:
             return False
@@ -210,8 +207,13 @@ class CheckerBoard:
 
         return "".join(map(lambda x: "".join(x), board))
 
+# end of CheckerBoard class
 
 
+# Constants for coloring the board
+FORE_RED = '\033[31m\033[1m'
+FORE_BLUE = '\033[34m\033[1m'
+DEF_FONT = '\033[39m\033[22m'
 # Exo-class functions
 def printBoard(state):
     """
