@@ -1,3 +1,6 @@
+"""
+    This module defines the CheckerBoard class.
+"""
 # Andrew Edwards -- almostimplemented.com
 # =======================================
 # A simple and efficient checkers class.
@@ -16,12 +19,14 @@ class CheckerBoard:
         """
             Initiates board via newGame().
         """
-        self.newGame()
+        self.new_game()
 
-    def newGame(self):
+    def new_game(self):
         """
             Changes current state to new game state.
         """
+        self.current_player = RED
+        self.mandatory_jumps = None
         self.state = [ [BLUE, EMPTY] * 4, \
                        [EMPTY, BLUE] * 4, \
                        [BLUE, EMPTY] * 4, \
@@ -31,62 +36,65 @@ class CheckerBoard:
                        [RED, EMPTY] * 4, \
                        [EMPTY, RED] * 4 ]
 
-    def pieceAt(self, row, column):
+    def make_move(self, move):
         """
-            Returns the cell contents at (row, column).
-        """
-        return self.state[row][column]
+            Assumes move = (row_old, col_old, row_new, col_new)
 
-    def makeMove(self, move):
-        """
-            Assumes move = (rowOld, colOld, rowNew, colNew)
-
-            Make the move from (rowOld, colOld) to (rowNew, colNew).
+            Make the move from (row_old, col_old) to (row_new, col_new).
             Assumes the move is legal. If the move is a jump, the jumped
-            piece is removed from the board. If (rowNew, colNew) is the
+            piece is removed from the board. If (row_new, col_new) is the
             last row on the opponent's side, the piece is kinged.
         """
-        rowOld, colOld, rowNew, colNew = move
-        self.state[rowNew][colNew] = self.state[rowOld][colOld]
-        self.state[rowOld][colOld] = EMPTY
+        row_old, col_old, row_new, col_new = move
+        self.state[row_new][col_new] = self.state[row_old][col_old]
+        self.state[row_old][col_old] = EMPTY
 
-        if abs(rowOld - rowNew) == 2:
-            rowJumped = (rowOld + rowNew) / 2
-            colJumped = (colOld + colNew) / 2
+        if abs(row_old - row_new) == 2:
+            row_jumped = (row_old + row_new) / 2
+            col_jumped = (col_old + col_new) / 2
 
-            self.state[rowJumped][colJumped] = EMPTY
+            self.state[row_jumped][col_jumped] = EMPTY
 
-        if rowNew == 0 and self.state[rowNew][colNew] == RED:
-            self.state[rowNew][colNew] = RED_KING
-        if rowNew == 7 and self.state[rowNew][colNew] == BLUE:
-            self.state[rowNew][colNew] = BLUE_KING
+            self.mandatory_jumps = self.jumps_from_spot(self.current_player, row_new, col_new)
+            if self.mandatory_jumps:
+                return
 
-    def peekMove(self, move):
+        if row_new == 0 and self.state[row_new][col_new] == RED:
+            self.state[row_new][col_new] = RED_KING
+        if row_new == 7 and self.state[row_new][col_new] == BLUE:
+            self.state[row_new][col_new] = BLUE_KING
+
+        if self.current_player == RED:
+            self.current_player = BLUE
+        else:
+            self.current_player = RED
+
+    def peek_move(self, move):
         """
-            Assumes move = (rowOld, colOld, rowNew, colNew)
+            Assumes move = (row_old, col_old, row_new, col_new)
 
             Return a 2D integer array representing the change
             in game state resulting from move.
         """
-        rowOld, colOld, rowNew, colNew = move
-        futureState = [[c for c in x] for x in self.state]
-        futureState[rowNew][colNew] = futureState[rowOld][colOld]
-        futureState[rowOld][colOld] = EMPTY
+        row_old, col_old, row_new, col_new = move
+        future_state = [[c for c in x] for x in self.state]
+        future_state[row_new][col_new] = future_state[row_old][col_old]
+        future_state[row_old][col_old] = EMPTY
 
-        if abs(rowOld - rowNew) == 2:
-            rowJumped = (rowOld + rowNew) / 2
-            colJumped = (colOld + colNew) / 2
+        if abs(row_old - row_new) == 2:
+            row_jumped = (row_old + row_new) / 2
+            col_jumped = (col_old + col_new) / 2
 
-            futureState[rowJumped][colJumped] = EMPTY
+            future_state[row_jumped][col_jumped] = EMPTY
 
-        if rowNew == 0 and futureState[rowNew][colNew] == RED:
-            futureState[rowNew][colNew] = RED_KING
-        if rowNew == 7 and futureState[rowNew][colNew] == BLUE:
-            futureState[rowNew][colNew] = BLUE_KING
+        if row_new == 0 and future_state[row_new][col_new] == RED:
+            future_state[row_new][col_new] = RED_KING
+        if row_new == 7 and future_state[row_new][col_new] == BLUE:
+            future_state[row_new][col_new] = BLUE_KING
 
-        return futureState
+        return future_state
 
-    def getLegalMoves(self, player):
+    def get_legal_moves(self, player):
         """
             Returns list of all legal moves that player can make.
             If player can jump, he must, so only jumps are returned.
@@ -94,86 +102,96 @@ class CheckerBoard:
         if player != RED and player != BLUE:
             return None
 
-        legalMoves = [(rowOld, colOld, rowOld + i, colOld + j) \
-                        for rowOld in range(8)          \
-                        for colOld in range(8)          \
-                        for i in (-2, 2)                \
-                        for j in (-2, 2)                \
-                            if self.state[rowOld][colOld] == [player, player + 1] \
-                            and self.canJump(player, (rowOld, colOld, rowOld + i, colOld + j))]
+        if self.mandatory_jumps:
+            return self.mandatory_jumps
 
-        if len(legalMoves) != 0:
-            return legalMoves
+        legal_moves = [(row_old, col_old, row_old + i, col_old + j)
+                        for row_old in range(8)
+                        for col_old in range(8)
+                        for i in (-2, 2)
+                        for j in (-2, 2)
+                          if self.state[row_old][col_old] in [player, player + 1]
+                         and self.can_jump(player, (row_old, col_old, row_old + i, col_old + j))]
+        if len(legal_moves) != 0:
+            return legal_moves
 
-        legalMoves = [(rowOld, colOld, rowOld + i, colOld + j) \
-                        for rowOld in range(8)          \
-                        for colOld in range(8)          \
-                        for i in (-1, 1)                \
-                        for j in (-1, 1)                \
-                            if self.state[rowOld][colOld] in [player, player + 1] \
-                            and self.canMove(player, (rowOld, colOld, rowOld + i, colOld + j))]
+        legal_moves = [(row_old, col_old, row_old + i, col_old + j)
+                        for row_old in range(8)
+                        for col_old in range(8)
+                        for i in (-1, 1)
+                        for j in (-1, 1)
+                          if self.state[row_old][col_old] in [player, player + 1]
+                         and self.can_move(player, (row_old, col_old, row_old + i, col_old + j))]
 
-        if len(legalMoves) == 0:
+        if len(legal_moves) == 0:
             return None
-        return legalMoves
+        return legal_moves
 
 
-    def canJump(self, player, move):
+    def can_jump(self, player, move):
         """
             Boolean function to determine of the player, move pair is legal.
             Has precondition that the move is of the form:
                         (x, y, x +/- 2, y +/- 2)
         """
-        rowOld, colOld, rowNew, colNew = move
+        row_old, col_old, row_new, col_new = move
 
-        rowJumped = (rowOld + rowNew) / 2
-        colJumped = (colOld + colNew) / 2
+        row_jumped = (row_old + row_new) / 2
+        col_jumped = (col_old + col_new) / 2
 
-        if rowNew < 0 or rowNew > 7 or colNew < 0 or colNew > 7:
+        if row_new < 0 or row_new > 7 or col_new < 0 or col_new > 7:
             return False
 
-        if self.state[rowNew][colNew] != EMPTY:
+        if self.state[row_new][col_new] != EMPTY:
             return False
 
         if player == RED:
-            if self.state[rowOld][colOld] == RED and rowNew > rowOld:
+            if self.state[row_old][col_old] == RED and row_new > row_old:
                 return False
-            if self.state[rowJumped][colJumped] != BLUE and \
-               self.state[rowJumped][colJumped] != BLUE_KING:
+            if self.state[row_jumped][col_jumped] != BLUE and \
+               self.state[row_jumped][col_jumped] != BLUE_KING:
                 return False
             return True
 
         if player == BLUE:
-            if self.state[rowOld][colOld] == BLUE and rowNew > rowOld:
+            if self.state[row_old][col_old] == BLUE and row_new < row_old:
                 return False
-            if self.state[rowJumped][colJumped] != RED and \
-               self.state[rowJumped][colJumped] != RED_KING:
+            if self.state[row_jumped][col_jumped] != RED and \
+               self.state[row_jumped][col_jumped] != RED_KING:
                 return False
             return True
 
-    def canMove(self, player, move):
+    def jumps_from_spot(self, player, row, col):
+        jumps = [(row, col, row + i, col + j) for i in (-2, 2) for j in (-2, 2)
+                     if self.can_jump(player, (row, col, row + i, col + j))]
+        return jumps if jumps else None
+
+    def can_move(self, player, move):
         """
             Boolean function to determine of the player, move pair is legal.
             Has precondition that the move is of the form:
                         (x, y, x +/- 1, y +/- 1)
         """
-        rowOld, colOld, rowNew, colNew = move
+        row_old, col_old, row_new, col_new = move
 
-        if rowNew < 0 or rowNew > 7 or colNew < 0 or colNew > 7:
+        if row_new < 0 or row_new > 7 or col_new < 0 or col_new > 7:
             return False
 
-        if self.state[rowNew][colNew] != EMPTY:
+        if self.state[row_new][col_new] != EMPTY:
             return False
 
         if player == RED:
-            if self.state[rowOld][rowNew] == RED and rowNew > rowOld:
+            if self.state[row_old][col_old] == RED and row_new > row_old:
                 return False
             return True
 
         if player == BLUE:
-            if self.state[rowOld][colOld] == BLUE and rowNew < rowOld:
+            if self.state[row_old][col_old] == BLUE and row_new < row_old:
                 return False
             return True
+
+    def game_over(self, player):
+        return self.get_legal_moves(player) == None
 
     def __str__(self):
         """
@@ -181,6 +199,11 @@ class CheckerBoard:
             Uses ANSI color codes. If not compatible with your configurations,
             set color constants at top of module to null strings.
         """
+        # Constants for coloring the board
+        FORE_RED = '\033[31m\033[1m'
+        FORE_BLUE = '\033[34m\033[1m'
+        DEF_FONT = '\033[39m\033[22m'
+
         board = [None] * 17
         for i in range(9):
             board[2*i] = ["+", " - "] + ["+", " - "]*7 + ["+", "\n"]
@@ -195,13 +218,15 @@ class CheckerBoard:
             j = 0
             for cell in row:
                 if cell == RED:
-                    board[2*i+1][2*j+1] = FORE_RED + ' r ' + DEF_FONT
+                    board[2*i+1][2*j+1] = FORE_RED + str(i) + 'r' + str(j) + DEF_FONT
                 elif cell == RED_KING:
-                    board[2*i+1][2*j+1] = FORE_RED + ' R ' + DEF_FONT
+                    board[2*i+1][2*j+1] = FORE_RED + str(i) + 'R' + str(j) + DEF_FONT
                 elif cell == BLUE:
-                    board[2*i+1][2*j+1] = FORE_BLUE + ' b ' + DEF_FONT
+                    board[2*i+1][2*j+1] = FORE_BLUE + str(i) + 'b' + str(j) + DEF_FONT
                 elif cell == BLUE_KING:
-                    board[2*i+1][2*j+1] = FORE_BLUE + ' B ' + DEF_FONT
+                    board[2*i+1][2*j+1] = FORE_BLUE + str(i) + 'B' + str(j) + DEF_FONT
+                elif (i + j) % 2 == 0:
+                    board[2*i+1][2*j+1] = str(i) + "," + str(j)
                 j += 1
             i += 1
 
@@ -210,39 +235,3 @@ class CheckerBoard:
 # end of CheckerBoard class
 
 
-# Constants for coloring the board
-FORE_RED = '\033[31m\033[1m'
-FORE_BLUE = '\033[34m\033[1m'
-DEF_FONT = '\033[39m\033[22m'
-# Exo-class functions
-def printBoard(state):
-    """
-        Prints out ASCII art representation of board.
-        Uses ANSI color codes. If not compatible with your configurations,
-        set color constants at top of module to null strings.
-    """
-    board = [None] * 17
-    for i in range(9):
-        board[2*i] = ["+", " - "] + ["+", " - "]*7 + ["+", "\n"]
-        if i < 8:
-          board[2*i + 1] = ["|", "   "] \
-                         + [a for subl in [["|", "   "] for _ in range(7)] for a in subl] \
-                         + ["|", "\n"]
-
-    # Flesh out board with pieces
-    i = 0
-    for row in state:
-        j = 0
-        for cell in row:
-            if cell == RED:
-                board[2*i+1][2*j+1] = FORE_RED + ' r ' + DEF_FONT
-            elif cell == RED_KING:
-                board[2*i+1][2*j+1] = FORE_RED + ' R ' + DEF_FONT
-            elif cell == BLUE:
-                board[2*i+1][2*j+1] = FORE_BLUE + ' b ' + DEF_FONT
-            elif cell == BLUE_KING:
-                board[2*i+1][2*j+1] = FORE_BLUE + ' B ' + DEF_FONT
-            j += 1
-        i += 1
-
-    print "".join(map(lambda x: "".join(x), board))

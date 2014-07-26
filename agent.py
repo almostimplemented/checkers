@@ -6,13 +6,8 @@
 
 
 class CheckersAgent:
-    def __init__(self, player, board, moveFunction):
-        if player not in [RED, BLUE]:
-            raise ValueError
-        self.player = player
-        self.board = board
-        self.moveFunction = moveFunction
+    def __init__(self, move_function):
+        self.move_function = move_function
 
-    def doMove(self):
-        return self.moveFunction(self.board)
-
+    def doMove(self, board):
+        return self.move_function(board)
