@@ -10,7 +10,6 @@
 import checkers
 import agent
 import sys
-import re
 
 EMPTY, RED, RED_KING, BLUE, BLUE_KING = range(5)
 
@@ -44,7 +43,7 @@ def main():
             legal_moves = B.get_legal_moves(current_player)
 
             if jumpFlag:
-                print "Make jump"
+                print "Make jump."
                 print ""
             else:
                 print "Turn %i" % turn
@@ -72,7 +71,7 @@ def main():
             # If jumps remain, then the board will not update current player
             if B.current_player == current_player:
                 jumpFlag = 1
-                print "Jumps must be taken"
+                print "Jumps must be taken."
                 continue
             else:
                 current_player = B.current_player
@@ -114,7 +113,7 @@ def main():
                 legal_moves = B.get_legal_moves(current_player)
 
                 if jumpFlag:
-                    print "Make jump"
+                    print "Make jump."
                     print ""
                 else:
                     print "Turn %i" % turn
@@ -142,21 +141,26 @@ def main():
                 # If jumps remain, then the board will not update current player
                 if B.current_player == current_player:
                     jumpFlag = 1
-                    print "Jumps must be taken"
+                    print "Jumps must be taken."
                     continue
                 else:
                     current_player = B.current_player
                     jumpFlag = 0
 
             else:
-                B.make_move(cpu.doMove(B))
+                move = cpu.doMove(B)
+                B.make_move(move)
+                print "Turn %i" % turn
+                print "CPU moved " + str(move[:2]) + " to " + str(move[2:])
                 if B.current_player == current_player:
                     jumpFlag = 1
-                    print "Jumps must be taken"
+                    print "Jumps must be taken."
                     continue
                 else:
                     current_player = B.current_player
                     jumpFlag = 0
+                print ""
+
             turn += 1
 
         if B.current_player == RED:
@@ -171,5 +175,10 @@ def main():
         # red_agent = raw_input("Enter filename or path to first agent file:")
 
 if __name__ == '__main__':
-    status = main()
-    sys.exit(status)
+    try:
+        status = main()
+        sys.exit(status)
+    except KeyboardInterrupt:
+        print ""
+        print "Game terminated."
+        sys.exit(1)
