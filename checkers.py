@@ -7,6 +7,8 @@
 #
 # Last updated: July 21, 2014
 
+from copy import deepcopy
+
 # Constants for board positions
 EMPTY, RED, RED_KING, BLUE, BLUE_KING = range(5)
 
@@ -35,6 +37,12 @@ class CheckerBoard:
                        [EMPTY, RED] * 4, \
                        [RED, EMPTY] * 4, \
                        [EMPTY, RED] * 4 ]
+
+    def piece_at(self, row, col):
+        try:
+            return self.state[row][col]
+        except IndexError:
+            return -1
 
     def make_move(self, move):
         """
@@ -73,26 +81,12 @@ class CheckerBoard:
         """
             Assumes move = (row_old, col_old, row_new, col_new)
 
-            Return a 2D integer array representing the change
-            in game state resulting from move.
+            Return a new CheckerBoard object reflecting the change in
+            the game state resulting from move.
         """
-        row_old, col_old, row_new, col_new = move
-        future_state = [[c for c in x] for x in self.state]
-        future_state[row_new][col_new] = future_state[row_old][col_old]
-        future_state[row_old][col_old] = EMPTY
-
-        if abs(row_old - row_new) == 2:
-            row_jumped = (row_old + row_new) / 2
-            col_jumped = (col_old + col_new) / 2
-
-            future_state[row_jumped][col_jumped] = EMPTY
-
-        if row_new == 0 and future_state[row_new][col_new] == RED:
-            future_state[row_new][col_new] = RED_KING
-        if row_new == 7 and future_state[row_new][col_new] == BLUE:
-            future_state[row_new][col_new] = BLUE_KING
-
-        return future_state
+        future_board = deepcopy(self)
+        future_board.make_move(move)
+        return future_board
 
     def get_legal_moves(self, player):
         """
@@ -110,7 +104,7 @@ class CheckerBoard:
                         for col_old in range(8)
                         for i in (-2, 2)
                         for j in (-2, 2)
-                          if self.state[row_old][col_old] in [player, player + 1]
+                          if self.piece_at(row_old, col_old) in [player, player + 1]
                          and self.can_jump(player, (row_old, col_old, row_old + i, col_old + j))]
         if len(legal_moves) != 0:
             return legal_moves
@@ -120,7 +114,7 @@ class CheckerBoard:
                         for col_old in range(8)
                         for i in (-1, 1)
                         for j in (-1, 1)
-                          if self.state[row_old][col_old] in [player, player + 1]
+                          if self.piece_at(row_old, col_old) in [player, player + 1]
                          and self.can_move(player, (row_old, col_old, row_old + i, col_old + j))]
 
         if len(legal_moves) == 0:
@@ -142,22 +136,22 @@ class CheckerBoard:
         if row_new < 0 or row_new > 7 or col_new < 0 or col_new > 7:
             return False
 
-        if self.state[row_new][col_new] != EMPTY:
+        if self.piece_at(row_new, col_new) != EMPTY:
             return False
 
         if player == RED:
-            if self.state[row_old][col_old] == RED and row_new > row_old:
+            if self.piece_at(row_old, col_old) == RED and row_new > row_old:
                 return False
-            if self.state[row_jumped][col_jumped] != BLUE and \
-               self.state[row_jumped][col_jumped] != BLUE_KING:
+            if self.piece_at(row_jumped, col_jumped) != BLUE and \
+               self.piece_at(row_jumped, col_jumped) != BLUE_KING:
                 return False
             return True
 
         if player == BLUE:
-            if self.state[row_old][col_old] == BLUE and row_new < row_old:
+            if self.piece_at(row_old, col_old) == BLUE and row_new < row_old:
                 return False
-            if self.state[row_jumped][col_jumped] != RED and \
-               self.state[row_jumped][col_jumped] != RED_KING:
+            if self.piece_at(row_jumped, col_jumped) != RED and \
+               self.piece_at(row_jumped, col_jumped) != RED_KING:
                 return False
             return True
 
@@ -177,16 +171,16 @@ class CheckerBoard:
         if row_new < 0 or row_new > 7 or col_new < 0 or col_new > 7:
             return False
 
-        if self.state[row_new][col_new] != EMPTY:
+        if self.piece_at(row_new, col_new) != EMPTY:
             return False
 
         if player == RED:
-            if self.state[row_old][col_old] == RED and row_new > row_old:
+            if self.piece_at(row_old, col_old) == RED and row_new > row_old:
                 return False
             return True
 
         if player == BLUE:
-            if self.state[row_old][col_old] == BLUE and row_new < row_old:
+            if self.piece_at(row_old, col_old) == BLUE and row_new < row_old:
                 return False
             return True
 

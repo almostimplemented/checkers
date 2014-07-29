@@ -25,23 +25,23 @@ def adv(board): # Advancement
     passive = RED if active == BLUE else BLUE
 
     if passive == BLUE:
-        close_enemies = [board.state[4][j] for j in range(0, 8, 2)
-                            if board.state[4][j] == passive]          \
-                      + [board.state[5][j] for j in range(1, 8, 2)
-                            if board.state[5][j] == passive]
-        far_enemies = [board.state[3][j] for j in range(1, 8, 2)
-                            if board.state[3][j] == passive]            \
-                      + [board.state[2][j] for j in range(0, 8, 2)
-                            if board.state[2][j] == passive]
+        close_enemies = [board.piece_at(4, j) for j in range(0, 8, 2)
+                            if board.piece_at(4, j) == passive]          \
+                      + [board.piece_at(5, j) for j in range(1, 8, 2)
+                            if board.piece_at(5, j) == passive]
+        far_enemies = [board.piece_at(3, j) for j in range(1, 8, 2)
+                            if board.piece_at(3, j) == passive]            \
+                      + [board.piece_at(2, j) for j in range(0, 8, 2)
+                            if board.piece_at(2, j) == passive]
     else:
-        close_enemies = [board.state[2][j] for j in range(0, 8, 2)
-                            if board.state[4][j] == passive]          \
-                      + [board.state[3][j] for j in range(1, 8, 2)
-                            if board.state[5][j] == passive]
-        far_enemies = [board.state[5][j] for j in range(1, 8, 2)
-                            if board.state[3][j] == passive]            \
-                      + [board.state[4][j] for j in range(0, 8, 2)
-                            if board.state[2][j] == passive]
+        close_enemies = [board.piece_at(2, j) for j in range(0, 8, 2)
+                            if board.piece_at(4, j) == passive]          \
+                      + [board.piece_at(3, j) for j in range(1, 8, 2)
+                            if board.piece_at(5, j) == passive]
+        far_enemies = [board.piece_at(5, j) for j in range(1, 8, 2)
+                            if board.piece_at(3, j) == passive]            \
+                      + [board.piece_at(4, j) for j in range(0, 8, 2)
+                            if board.piece_at(2, j) == passive]
 
     print close_enemies
     print far_enemies
@@ -69,11 +69,11 @@ def back(board): # Back Row Bridge
     active_king = active + 1
 
     if passive == RED:
-        back_row_flag = board.state[7][1] in [RED, RED_KING] \
-                        and board.state[7][5] in [RED, RED_KING]
+        back_row_flag = board.piece_at(7, 1) in [RED, RED_KING] \
+                        and board.piece_at(7, 5) in [RED, RED_KING]
     else:
-        back_row_flag = board.state[0][2] in [BLUE, BLUE_KING] \
-                        and board.state[0][4] in [BLUE, BLUE_KING]
+        back_row_flag = board.piece_at(0, 2) in [BLUE, BLUE_KING] \
+                        and board.piece_at(0, 4) in [BLUE, BLUE_KING]
 
     active_king_flag = all(map(lambda x: x != active_king, board.state))
 
@@ -111,12 +111,29 @@ def cntr(board): # Center Control II
     if active == BLUE:
         control_squares = [(2, 0), (2, 2), (3, 1), (3, 3), (4, 0), (5, 1),
                            (5, 7), (6, 6)]
+        direction = 1
     else:
         control_squares = [(5, 5), (5, 7), (4, 4), (4, 6), (3, 7), (2, 6),
                            (2, 0), (1, 1)]
+        direction = -1
 
-    control_squares = map(lambda x: board.state[x[0]][x[1]], control_squares)
-    return len(filter(lambda x: x in [active, active + 1], control_squares))
+    empty_control_squares = filter(lambda sq: board.piece_at(sq[0], sq[1]) == EMPTY, control_squares)
+
+    could_be_control = filter(lambda move: board.can_move(active, move),
+                             [(c[0] - direction, c[1] + j, c[0], c[1])
+                                 for c in empty_control_squares
+                                 for j in [-1, 1]
+                            if board.piece_at(c[0] - direction, c[1] + j) in [active, active + 1]])
+
+    could_be_control += filter(lambda move: board.can_move(active, move),
+                             [(c[0] + direction, c[1] + j, c[0], c[1])
+                                     for c in control_squares
+                                     for j in [-1, 1]
+                                if board.piece_at(c[0] - direction, c[1] + j)  == active + 1])
+
+    active_control = filter(lambda x: board.piece_at(x[0], x[1]) in [active, active + 1], control_squares)
+
+    return len(could_be_control + active_control)
 
 def corn(board): # Double-Corner Credit
     """
@@ -150,11 +167,12 @@ def deny(board): # Denial of Occupancy
                   for col_old in range(8)
                   for i in (-1, 1)
                   for j in (-1, 1)
-                    if piece(row_old, col_old, board.state) in [active, active + 1]
+                    if board.piece_at(row_old, col_old) in [active, active + 1]
                    and board.can_move(active, (row_old, col_old, row_old + i, col_old + j))]
 
-    denied_moves = [move for move in normal_moves if takeable(move[2:], board.peek_move(move)) \
-                                         and not takebackable(move[2:], board.peek_move(move))]
+    denied_moves = [move for move in normal_moves
+                               if takeable(move[2:], board.peek_move(move)) \
+                               and not takebackable(move[2:], board.peek_move(move))]
 
     return len(denied_moves)
 
@@ -236,7 +254,18 @@ def kcent(board): # King Center Control
         squares: 11, 12, 15, 16, 20, 21, 24, and 25 which is occupied
         by a passive king.
     """
-    return 1
+    active = board.current_player
+    passive = RED if active == BLUE else BLUE
+
+    if active == BLUE:
+        control_squares = [(2, 0), (2, 2), (3, 1), (3, 3), (4, 0), (5, 1),
+                           (5, 7), (6, 6)]
+    else:
+        control_squares = [(5, 5), (5, 7), (4, 4), (4, 6), (3, 7), (2, 6),
+                           (2, 0), (1, 1)]
+
+    control_squares = map(lambda x: board.piece_at(x[0], x[1]), control_squares)
+    return len(filter(lambda x: x == passive + 1, control_squares))
 
 def mob(board): # Total Mobility
     """
@@ -253,17 +282,22 @@ def mob(board): # Total Mobility
                   for col_old in range(8)
                   for i in (-1, 1)
                   for j in (-1, 1)
-                   if piece(row_old, col_old, board.state) in [active, active + 1]
+                   if board.piece_at(row_old, col_old) in [active, active + 1]
                    and board.can_move(active, (row_old, col_old, row_old + i, col_old + j))]
 
-    return len(normal_moves)
+    potential_squares = []
+    for move in normal_moves:
+        if move[2:] not in potential_squares:
+            potential_squares.append(move[2:])
+
+    return len(potential_squares)
 
 def mobil(board): # Undenied Mobility
     """
         The parameter is credited with the difference between MOB and
         DENY.
     """
-    return 1
+    return mob(board) - deny(board)
 
 def move(board): # Move
     """
@@ -309,7 +343,39 @@ def thret(board): # Threat
         active piece may be moved and in doing so threaten to capture
         a passive piece on a subsequent move.
     """
-    return 1
+    # Let's make the definition that piece A is threatening to capture
+    # piece P if P is takeable by P and A is not takeable in the given
+    # state.
+    active = board.current_player
+    passive = RED if active == BLUE else BLUE
+    direction = 1 if active == BLUE else -1
+
+    normal_moves = [(row_old, col_old, row_old + i, col_old + j)
+                  for row_old in range(8)
+                  for col_old in range(8)
+                  for i in (-1, 1)
+                  for j in (-1, 1)
+                   if board.piece_at(row_old, col_old) in [active, active + 1]
+                   and board.can_move(active, (row_old, col_old, row_old + i, col_old + j))]
+
+    threat_count = 0
+
+    for move in normal_moves:
+        future_board = board.peek_move(move)
+        if future_board.piece_at(move[2], move[3]) == active \
+           and any(map(lambda x: future_board.can_jump(active, x),
+                   [(move[2], move[3], move[2] + 2*direction, move[3] + j)
+                      for j in [-2, 2]])) \
+           and not takeable((move[2], move[3]), future_board):
+               threat_count += 1
+        elif future_board.piece_at(move[2], move[3]) == active + 1 \
+           and any(map(lambda x: future_board.can_jump(active, x),
+                   [(move[2], move[3], move[2] + i, move[3] + j)
+                      for i in [-2, 2] for j in [-2, 2]])) \
+           and not takeable((move[2], move[3]), future_board):
+               threat_count += 1
+
+    return threat_count
 
 parameter_list = [adv, apex, back, cent, cntr, corn, cramp, deny, dia, diav,
                   dyke, exch, expos, fork, gap, guard, hole, kcent, mob, mobil,
@@ -327,189 +393,156 @@ def piece(row, col, state):
     except IndexError:
         return -1
 
-def can_jump(player, move, state):
-    """
-        Boolean function to determine of the player, move pair is legal.
-        Has precondition that the move is of the form:
-                    (x, y, x +/- 2, y +/- 2)
-    """
-    print move
-    row_old, col_old, row_new, col_new = move
-
-    row_jumped = (row_old + row_new) / 2
-    col_jumped = (col_old + col_new) / 2
-
-    if row_new < 0 or row_new > 7 or col_new < 0 or col_new > 7:
-        return False
-
-    if state[row_new][col_new] != EMPTY:
-        return False
-
-    if player == RED:
-        if state[row_old][col_old] == RED and row_new > row_old:
-            return False
-        if state[row_jumped][col_jumped] != BLUE and \
-           state[row_jumped][col_jumped] != BLUE_KING:
-            return False
-        return True
-
-    if player == BLUE:
-        if state[row_old][col_old] == BLUE and row_new < row_old:
-            return False
-        if state[row_jumped][col_jumped] != RED and \
-           state[row_jumped][col_jumped] != RED_KING:
-            return False
-        return True
-
-
-def takeable(cell, state):
+def takeable(cell, board):
     row, col = cell
-    if state[row][col] in [RED, RED_KING]:
+    if board.piece_at(row, col) in [RED, RED_KING]:
         player = BLUE
     else:
         player = RED
-    return any(map(lambda x: can_jump(player, x, state), [(row - i, col - j, row + i, col + j)
+    return any(map(lambda x: board.can_jump(player, x), [(row - i, col - j, row + i, col + j)
                                                              for i in [-1, 1] for j in [-1, 1]
-                                                             if piece(row - i, col - j, state)
+                                                             if board.piece_at(row - i, col - j)
                                                                     in [player, player + 1]]))
 
 
-# This is the most complicated function in the module, because it has
-# to perform a case by case analysis.
+# THIS FUNCTION NEEDS MAJOR REFACTORING
+# ALL THE TRIPLETS OF PLANS ARE BASICALLY THE SAME
+# FIX IT ANDREW
+# FIX IT
 
-def takebackable(cell, state):
+def takebackable(cell, board):
     """
         Assumes cell is takeable and that the opponent plays optimally.
         Checks if there is a chance to win a piece back after losing the
         piece at cell.
     """
     row, col = cell
-    if state[row][col] in [RED, RED_KING]:
+    if board.piece_at(row, col) in [RED, RED_KING]:
         victim = RED
     else:
         victim = BLUE
 
     attacker = RED if victim == BLUE else BLUE
 
-    direction = -1 if victim == RED else 1
+    direction = 1 if victim == BLUE else -1
 
-    threat_1 = piece(row + direction, col - 1, state) == attacker
-    threat_2 = piece(row + direction, col + 1, state) == attacker
-    king_threat_1 = piece(row + direction, col - 1, state) == attacker + 1
-    king_threat_2 = piece(row + direction, col + 1, state) == attacker + 1
-    king_threat_3 = piece(row - direction, col - 1, state) == attacker + 1
-    king_threat_4 = piece(row - direction, col + 1, state) == attacker + 1
+    threat_1 = board.piece_at(row + direction, col - 1) == attacker
+    threat_2 = board.piece_at(row + direction, col + 1) == attacker
+    king_threat_1 = board.piece_at(row + direction, col - 1) == attacker + 1
+    king_threat_2 = board.piece_at(row + direction, col + 1) == attacker + 1
+    king_threat_3 = board.piece_at(row - direction, col - 1) == attacker + 1
+    king_threat_4 = board.piece_at(row - direction, col + 1) == attacker + 1
 
     if threat_1:
-        plan_1 = piece(row - 2*direction, col + 2, state) in [victim, victim + 1] \
-                 and piece(row - 3*direction, col + 3, state) != EMPTY \
-                 and (piece(row - 2*direction, col, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col - 1, state) != EMPTY)
-        plan_2 = piece(row - 2*direction, col, state) in [victim, victim + 1] \
-                 and piece(row, col+2, state) == EMPTY \
-                 and piece(row - 3*direction, col - 1, state) != EMPTY \
-                 and (piece(row - 2*direction, col + 2, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col + 3, state) != EMPTY)
-        plan_3 = piece(row, col+2, state) == victim + 1 \
-                 and piece(row - 2*direction, col, state) == EMPTY \
-                 and (piece(row - 2*direction, col + 2, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col + 3, state) != EMPTY)
+        plan_1 = board.piece_at(row - 2*direction, col + 2) in [victim, victim + 1] \
+                 and board.piece_at(row - 3*direction, col + 3) != EMPTY \
+                 and (board.piece_at(row - 2*direction, col) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col - 1) != EMPTY)
+        plan_2 = board.piece_at(row - 2*direction, col) in [victim, victim + 1] \
+                 and board.piece_at(row, col+2) == EMPTY \
+                 and board.piece_at(row - 3*direction, col - 1) != EMPTY \
+                 and (board.piece_at(row - 2*direction, col + 2) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col + 3) != EMPTY)
+        plan_3 = board.piece_at(row, col+2) == victim + 1 \
+                 and board.piece_at(row - 2*direction, col) == EMPTY \
+                 and (board.piece_at(row - 2*direction, col + 2) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col + 3) != EMPTY)
         if not (plan_1 or plan_2 or plan_3): return False
 
     if threat_2:
-        plan_1 = piece(row - 2*direction, col - 2, state) in [victim, victim + 1] \
-                 and piece(row - 3*direction, col - 3, state) != EMPTY \
-                 and (piece(row - 2*direction, col, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col + 1, state) != EMPTY)
-        plan_2 = piece(row - 2*direction, col, state) in [victim, victim + 1] \
-                 and piece(row, col-2, state) == EMPTY \
-                 and piece(row - 3*direction, col + 1, state) != EMPTY \
-                 and (piece(row - 2*direction, col - 2, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col - 3, state) != EMPTY)
-        plan_3 = piece(row, col+2, state) == victim + 1 \
-                 and piece(row - 2*direction, col, state) == EMPTY \
-                 and (piece(row - 2*direction, col + 2, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col - 3, state) != EMPTY)
+        plan_1 = board.piece_at(row - 2*direction, col - 2) in [victim, victim + 1] \
+                 and board.piece_at(row - 3*direction, col - 3) != EMPTY \
+                 and (board.piece_at(row - 2*direction, col) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col + 1) != EMPTY)
+        plan_2 = board.piece_at(row - 2*direction, col) in [victim, victim + 1] \
+                 and board.piece_at(row, col-2) == EMPTY \
+                 and board.piece_at(row - 3*direction, col + 1) != EMPTY \
+                 and (board.piece_at(row - 2*direction, col - 2) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col - 3) != EMPTY)
+        plan_3 = board.piece_at(row, col+2) == victim + 1 \
+                 and board.piece_at(row - 2*direction, col) == EMPTY \
+                 and (board.piece_at(row - 2*direction, col + 2) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col - 3) != EMPTY)
         if not (plan_1 or plan_2 or plan_3): return False
 
     if king_threat_1:
-        plan_1 = piece(row - 2*direction, col + 2, state) in [victim, victim + 1] \
-                 and piece(row - 3*direction, col + 3, state) != EMPTY \
-                 and (piece(row - 2*direction, col, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col - 1, state) != EMPTY) \
-                 and (piece(row, col + 2, state) not in [victim, victim + 1] \
-                      or piece(row + direction, col + 3, state) != EMPTY)
-        plan_2 = piece(row - 2*direction, col, state) in [victim, victim + 1] \
-                 and piece(row, col+2, state) == EMPTY \
-                 and piece(row - 3*direction, col - 1, state) != EMPTY \
-                 and (piece(row - 2*direction, col + 2, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col + 3, state) != EMPTY) \
-                 and (piece(row, col + 2, state) not in [victim, victim + 1] \
-                      or piece(row + direction, col + 3, state) != EMPTY)
-        plan_3 = piece(row, col+2, state) == victim + 1 \
-                 and piece(row - 2*direction, col, state) == EMPTY \
-                 and (piece(row - 2*direction, col + 2, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col + 3, state) != EMPTY) \
-                 and piece(row + direction, col + 3, state) != EMPTY
+        plan_1 = board.piece_at(row - 2*direction, col + 2) in [victim, victim + 1] \
+                 and board.piece_at(row - 3*direction, col + 3) != EMPTY \
+                 and (board.piece_at(row - 2*direction, col) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col - 1) != EMPTY) \
+                 and (board.piece_at(row, col + 2) not in [victim, victim + 1] \
+                      or board.piece_at(row + direction, col + 3) != EMPTY)
+        plan_2 = board.piece_at(row - 2*direction, col) in [victim, victim + 1] \
+                 and board.piece_at(row, col+2) == EMPTY \
+                 and board.piece_at(row - 3*direction, col - 1) != EMPTY \
+                 and (board.piece_at(row - 2*direction, col + 2) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col + 3) != EMPTY) \
+                 and (board.piece_at(row, col + 2) not in [victim, victim + 1] \
+                      or board.piece_at(row + direction, col + 3) != EMPTY)
+        plan_3 = board.piece_at(row, col+2) == victim + 1 \
+                 and board.piece_at(row - 2*direction, col) == EMPTY \
+                 and (board.piece_at(row - 2*direction, col + 2) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col + 3) != EMPTY) \
+                 and board.piece_at(row + direction, col + 3) != EMPTY
         if not (plan_1 or plan_2 or plan_3): return False
 
     if king_threat_2:
-        plan_1 = piece(row - 2*direction, col - 2, state) in [victim, victim + 1] \
-                 and piece(row - 3*direction, col - 3, state) != EMPTY \
-                 and (piece(row - 2*direction, col, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col + 1, state) != EMPTY) \
-                 and (piece(row, col - 2, state) not in [victim, victim + 1] \
-                      or piece(row + direction, col - 3, state) != EMPTY)
-        plan_2 = piece(row - 2*direction, col, state) in [victim, victim + 1] \
-                 and piece(row, col-2, state) == EMPTY \
-                 and piece(row - 3*direction, col + 1, state) != EMPTY \
-                 and (piece(row - 2*direction, col - 2, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col - 3, state) != EMPTY) \
-                 and (piece(row, col - 2, state) not in [victim, victim + 1] \
-                      or piece(row + direction, col - 3, state) != EMPTY)
-        plan_3 = piece(row, col+2, state) == victim + 1 \
-                 and piece(row - 2*direction, col, state) == EMPTY \
-                 and (piece(row - 2*direction, col + 2, state) not in [victim, victim + 1] \
-                      or piece(row - 3*direction, col - 3, state) != EMPTY) \
-                 and piece(row + direction, col - 3, state) != EMPTY
+        plan_1 = board.piece_at(row - 2*direction, col - 2) in [victim, victim + 1] \
+                 and board.piece_at(row - 3*direction, col - 3) != EMPTY \
+                 and (board.piece_at(row - 2*direction, col) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col + 1) != EMPTY) \
+                 and (board.piece_at(row, col - 2) not in [victim, victim + 1] \
+                      or board.piece_at(row + direction, col - 3) != EMPTY)
+        plan_2 = board.piece_at(row - 2*direction, col) in [victim, victim + 1] \
+                 and board.piece_at(row, col-2) == EMPTY \
+                 and board.piece_at(row - 3*direction, col + 1) != EMPTY \
+                 and (board.piece_at(row - 2*direction, col - 2) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col - 3) != EMPTY) \
+                 and (board.piece_at(row, col - 2) not in [victim, victim + 1] \
+                      or board.piece_at(row + direction, col - 3) != EMPTY)
+        plan_3 = board.piece_at(row, col+2) == victim + 1 \
+                 and board.piece_at(row - 2*direction, col) == EMPTY \
+                 and (board.piece_at(row - 2*direction, col + 2) not in [victim, victim + 1] \
+                      or board.piece_at(row - 3*direction, col - 3) != EMPTY) \
+                 and board.piece_at(row + direction, col - 3) != EMPTY
         if not (plan_1 or plan_2 or plan_3): return False
 
     if king_threat_3:
-        plan_1 = piece(row + 2*direction, col + 2, state) == victim + 1 \
-                 and piece(row + 3*direction, col + 3, state) != EMPTY \
-                 and (piece(row + 2*direction, col, state) not in [victim, victim + 1] \
-                      or piece(row + 3*direction, col - 1, state) != EMPTY) \
-                 and (piece(row, col + 2, state) not in [victim, victim + 1] \
-                      or piece(row - direction, col + 3, state) != EMPTY)
-        plan_2 = piece(row + 2*direction, col, state) == victim + 1 \
-                 and piece(row, col + 2, state) == EMPTY \
-                 and piece(row + 3*direction, col - 1, state) != EMPTY \
-                 and (piece(row + 2*direction, col + 2, state) not in [victim, victim + 1] \
-                      or piece(row + 3*direction, col + 3, state) != EMPTY)
-        plan_3 = piece(row, col + 2, state) in [victim, victim + 1] \
-                 and piece(row + 2*direction, col, state) == EMPTY \
-                 and piece(row - direction, col + 3, state) != EMPTY \
-                 and (piece(row + 2*direction, col + 2, state) not in [victim, victim + 1] \
-                      or piece(row + 3*direction, col + 3, state) != EMPTY)
+        plan_1 = board.piece_at(row + 2*direction, col + 2) == victim + 1 \
+                 and board.piece_at(row + 3*direction, col + 3) != EMPTY \
+                 and (board.piece_at(row + 2*direction, col) not in [victim, victim + 1] \
+                      or board.piece_at(row + 3*direction, col - 1) != EMPTY) \
+                 and (board.piece_at(row, col + 2) not in [victim, victim + 1] \
+                      or board.piece_at(row - direction, col + 3) != EMPTY)
+        plan_2 = board.piece_at(row + 2*direction, col) == victim + 1 \
+                 and board.piece_at(row, col + 2) == EMPTY \
+                 and board.piece_at(row + 3*direction, col - 1) != EMPTY \
+                 and (board.piece_at(row + 2*direction, col + 2) not in [victim, victim + 1] \
+                      or board.piece_at(row + 3*direction, col + 3) != EMPTY)
+        plan_3 = board.piece_at(row, col + 2) in [victim, victim + 1] \
+                 and board.piece_at(row + 2*direction, col) == EMPTY \
+                 and board.piece_at(row - direction, col + 3) != EMPTY \
+                 and (board.piece_at(row + 2*direction, col + 2) not in [victim, victim + 1] \
+                      or board.piece_at(row + 3*direction, col + 3) != EMPTY)
         if not (plan_1 or plan_2 or plan_3): return False
 
     if king_threat_4:
-        plan_1 = piece(row + 2*direction, col - 2, state) == victim + 1 \
-                 and piece(row + 3*direction, col - 3, state) != EMPTY \
-                 and (piece(row + 2*direction, col, state) not in [victim, victim + 1] \
-                      or piece(row + 3*direction, col + 1, state) != EMPTY) \
-                 and (piece(row, col - 2, state) not in [victim, victim + 1] \
-                      or piece(row - direction, col - 3, state) != EMPTY)
-        plan_2 = piece(row + 2*direction, col, state) == victim + 1 \
-                 and piece(row, col - 2, state) == EMPTY \
-                 and piece(row + 3*direction, col + 1, state) != EMPTY \
-                 and (piece(row + 2*direction, col - 2, state) not in [victim, victim + 1] \
-                      or piece(row + 3*direction, col - 3, state) != EMPTY)
-        plan_3 = piece(row, col - 2, state) in [victim, victim + 1] \
-                 and piece(row + 2*direction, col, state) == EMPTY \
-                 and piece(row - direction, col - 3, state) != EMPTY \
-                 and (piece(row + 2*direction, col - 2, state) not in [victim, victim + 1] \
-                      or piece(row + 3*direction, col - 3, state) != EMPTY)
+        plan_1 = board.piece_at(row + 2*direction, col - 2) == victim + 1 \
+                 and board.piece_at(row + 3*direction, col - 3) != EMPTY \
+                 and (board.piece_at(row + 2*direction, col) not in [victim, victim + 1] \
+                      or board.piece_at(row + 3*direction, col + 1) != EMPTY) \
+                 and (board.piece_at(row, col - 2) not in [victim, victim + 1] \
+                      or board.piece_at(row - direction, col - 3) != EMPTY)
+        plan_2 = board.piece_at(row + 2*direction, col) == victim + 1 \
+                 and board.piece_at(row, col - 2) == EMPTY \
+                 and board.piece_at(row + 3*direction, col + 1) != EMPTY \
+                 and (board.piece_at(row + 2*direction, col - 2) not in [victim, victim + 1] \
+                      or board.piece_at(row + 3*direction, col - 3) != EMPTY)
+        plan_3 = board.piece_at(row, col - 2) in [victim, victim + 1] \
+                 and board.piece_at(row + 2*direction, col) == EMPTY \
+                 and board.piece_at(row - direction, col - 3) != EMPTY \
+                 and (board.piece_at(row + 2*direction, col - 2) not in [victim, victim + 1] \
+                      or board.piece_at(row + 3*direction, col - 3) != EMPTY)
         if not (plan_1 or plan_2 or plan_3): return False
     return True
 
