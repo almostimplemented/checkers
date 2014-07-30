@@ -61,11 +61,11 @@ class CheckerBoard:
         active = self.active
         passive = self.passive
         if move < 0:
-            taken_piece = int(1 << sum(i for (i, b) in enumerate(bin(n)[::-1]) if b == '1')/2)
+            taken_piece = int(1 << sum(i for (i, b) in enumerate(bin(move)[::-1]) if b == '1')/2)
             self.pieces[passive] ^= taken_piece
             if self.forward[passive] & taken_piece:
                 self.forward[passve] ^= taken_piece
-            if self.backward[passive] & take_piece:
+            if self.backward[passive] & taken_piece:
                 self.backward[passive] ^= taken_piece
 
         self.pieces[active] ^= move
@@ -112,10 +112,10 @@ class CheckerBoard:
         lbj = self.left_backward_jumps()
 
         if (rfj | lfj | rbj | lbj) != 0:
-            moves =  [0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
-            moves += [0x401 << i for (i, bit) in enumerate(bin(lfj)[::-1]) if bit == '1']
-            moves += [0x101 >> i for (i, bit) in enumerate(bin(rbj)[::-1]) if bit == '1']
-            moves += [0x401 >> i for (i, bit) in enumerate(bin(lbj)[::-1]) if bit == '1']
+            moves =  [-0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
+            moves += [-0x401 << i for (i, bit) in enumerate(bin(lfj)[::-1]) if bit == '1']
+            moves += [-0x101 << i - 4 for (i, bit) in enumerate(bin(rbj)[::-1]) if bit == '1']
+            moves += [-0x401 << i - 5 i for (i, bit) in enumerate(bin(lbj)[::-1]) if bit == '1']
             return moves
 
         # If not, then find normal moves
@@ -127,9 +127,8 @@ class CheckerBoard:
 
             moves =  [0x11 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
             moves += [0x21 << i for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
-# you're grabbing leading 0's and screwing up your calculations..
-            moves += [0x480000000 >> i for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
-            moves += [0x440000000 >> i for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
+            moves += [0x11 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
+            moves += [0x21 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
             return moves
 
     def __str__(self):
