@@ -7,7 +7,7 @@
 
 # Constants
 BLACK, WHITE = 0, 1
-VALID_SQUARES = 0x7FBFDFEFF # 11111111011111111011111111011111111
+VALID_SQUARES = 0x7FBFDFEFF
 
 # Feature functions
 def adv(board): # Advancement
@@ -106,6 +106,17 @@ def mob(board): # Total Mobility
         disregarding the fact that jump moves may or may not be
         available.
     """
+        rf = board.right_forward()
+        lf = board.left_forward()
+        rb = board.right_backward()
+        lb = board.left_backward()
+
+        destinations =  [0x10 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
+        destinations += [0x20 << i for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
+        destinations += [0x10 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
+        destinations += [0x20 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
+
+        dest_count = bin(reduce(lambda x, y: x|y, destinations)).count("1")
 
 def mobil(board): # Undenied Mobility
     """
