@@ -50,6 +50,9 @@ class CheckerBoard:
 
         self.empty = UNUSED_BITS ^ (2**36 - 1) ^ (self.pieces[BLACK] | self.pieces[WHITE])
 
+        self.jump = 0
+        self.mandatory_jumps = []
+
     def make_move(self, move):
         """
             Updates the game state to reflect the effects of the input
@@ -61,12 +64,14 @@ class CheckerBoard:
         active = self.active
         passive = self.passive
         if move < 0:
+            move *= -1
             taken_piece = int(1 << sum(i for (i, b) in enumerate(bin(move)[::-1]) if b == '1')/2)
             self.pieces[passive] ^= taken_piece
             if self.forward[passive] & taken_piece:
-                self.forward[passve] ^= taken_piece
+                self.forward[passive] ^= taken_piece
             if self.backward[passive] & taken_piece:
                 self.backward[passive] ^= taken_piece
+            self.jump = 1
 
         self.pieces[active] ^= move
         if self.forward[active] & move:
@@ -74,8 +79,21 @@ class CheckerBoard:
         if self.backward[active] & move:
             self.backward[active] ^= move
 
-        self.active, self.passive = self.passive, self.active
+        destination = move & self.pieces[active]
         self.empty = UNUSED_BITS ^ (2**36 - 1) ^ (self.pieces[BLACK] | self.pieces[WHITE])
+
+        if self.jump:
+            self.mandatory_jumps = self.jumps_from(destination)
+            if self.mandatory_jumps:
+                return
+
+        if active == BLACK and (destination & 0x780000000) != 0:
+            self.backward[BLACK] |= destination
+        elif active == WHITE and (destination & 0xf) != 0:
+            self.forward[WHITE] |= destination
+
+        self.jump = 0
+        self.active, self.passive = self.passive, self.active
 
     # These methods return an integer whose active bits are those squares
     # that can make the move indicated by the method name.
@@ -105,18 +123,14 @@ class CheckerBoard:
 
             Jumps are indicated with a negative sign.
         """
-        # First check if there are jumps
-        rfj = self.right_forward_jumps()
-        lfj = self.left_forward_jumps()
-        rbj = self.right_backward_jumps()
-        lbj = self.left_backward_jumps()
+        # First check if we are in a jump sequence
+        if self.jump:
+            return self.mandatory_jumps
 
-        if (rfj | lfj | rbj | lbj) != 0:
-            moves =  [-0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
-            moves += [-0x401 << i for (i, bit) in enumerate(bin(lfj)[::-1]) if bit == '1']
-            moves += [-0x101 << i - 4 for (i, bit) in enumerate(bin(rbj)[::-1]) if bit == '1']
-            moves += [-0x401 << i - 5 i for (i, bit) in enumerate(bin(lbj)[::-1]) if bit == '1']
-            return moves
+        # Next check if there are jumps
+        jumps = self.get_jumps()
+        if jumps:
+            return jumps
 
         # If not, then find normal moves
         else:
@@ -131,11 +145,70 @@ class CheckerBoard:
             moves += [0x21 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
             return moves
 
+
+    def get_jumps(self):
+        """
+            Returns a list of all possible jumps or None.
+
+            A legal move is represented by an integer with exactly two
+            bits turned on: the old position and the new position.
+
+            Jumps are indicated with a negative sign.
+        """
+        rfj = self.right_forward_jumps()
+        lfj = self.left_forward_jumps()
+        rbj = self.right_backward_jumps()
+        lbj = self.left_backward_jumps()
+
+        if (rfj | lfj | rbj | lbj) != 0:
+            moves =  [-0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
+            moves += [-0x401 << i for (i, bit) in enumerate(bin(lfj)[::-1]) if bit == '1']
+            moves += [-0x101 << i - 8 for (i, bit) in enumerate(bin(rbj)[::-1]) if bit == '1']
+            moves += [-0x401 << i - 10 for (i, bit) in enumerate(bin(lbj)[::-1]) if bit == '1']
+            return moves
+        else:
+            return None
+
+    def jumps_from(self, piece):
+        """
+            Returns list of all possible jumps from the piece indicated.
+
+            The argument piece should be of the form 2**n, where n + 1 is
+            the square of the piece in question (using the internal numeric
+            representaiton of the board).
+        """
+        if self.active == BLACK:
+            rfj = (self.empty >> 8) & (self.pieces[self.passive] >> 4) & piece
+            lfj = (self.empty >> 10) & (self.pieces[self.passive] >> 5) & piece
+            if piece & self.backward[self.active]: # piece at square is a king
+                rbj = (self.empty << 8) & (self.pieces[self.passive] << 4) & piece
+                lbj = (self.empty << 10) & (self.pieces[self.passive] << 5) & piece
+            else:
+                rbj = 0
+                lbj = 0
+        else:
+            rbj = (self.empty << 8) & (self.pieces[self.passive] << 4) & piece
+            lbj = (self.empty << 10) & (self.pieces[self.passive] << 5) & piece
+            if piece & self.forward[self.active]: # piece at square is a king
+                rfj = (self.empty >> 8) & (self.pieces[self.passive] >> 4) & piece
+                lfj = (self.empty >> 10) & (self.pieces[self.passive] >> 5) & piece
+            else:
+                rfj = 0
+                lfj = 0
+
+        if (rfj | lfj | rbj | lbj) != 0:
+            moves =  [-0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
+            moves += [-0x401 << i for (i, bit) in enumerate(bin(lfj)[::-1]) if bit == '1']
+            moves += [-0x101 << i - 8 for (i, bit) in enumerate(bin(rbj)[::-1]) if bit == '1']
+            moves += [-0x401 << i - 10 for (i, bit) in enumerate(bin(lbj)[::-1]) if bit == '1']
+            return moves
+        else:
+            return None
+
+
     def __str__(self):
         """
             Prints out ASCII art representation of board.
-            Uses ANSI color codes. If not compatible with your configurations,
-            set color constants at top of module to null strings.
         """
 
         EMPTY = -1
@@ -191,6 +264,9 @@ class CheckerBoard:
                     elif cell == WHITE_KING:
                         board[2*(7 - 2*i) + 1][2*(6 - 2*j) + 1] = \
                                 "W" + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
+                    else:
+                        board[2*(7 - 2*i) + 1][2*(6 - 2*j) + 1] = \
+                                " " + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
                 else:
                     if cell == BLACK:
                         board[2*(6 - 2*i) + 1][2*(7 - 2*j) - 1] = \
@@ -204,5 +280,8 @@ class CheckerBoard:
                     elif cell == WHITE_KING:
                         board[2*(6 - 2*i) + 1][2*(7 - 2*j) - 1] = \
                                 "W" + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
+                    else:
+                        board[2*(6 - 2*i) + 1][2*(7 - 2*j) - 1] = \
+                                " " + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
 
         return "".join(map(lambda x: "".join(x), board))
