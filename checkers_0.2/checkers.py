@@ -16,9 +16,7 @@ BLACK, WHITE = 0, 1
 # ensure that every normal move could be performed by flipping the
 # original bit and the bit either 4 or 5 bits away, in the cases of
 # moving right and left respectively.
-#
-# If we use a 32-bit word, we need to know which row our piece is in
-# in order to tell whether the "right forward" move is 4 or
+
 UNUSED_BITS = int('0b100000000100000000100000000100000000', 2)
 
 ### CLASSES
