@@ -19,7 +19,7 @@ def adv(board): # Advancement
     """
     passive = board.passive
 
-    rows_3_and_4 = 0x1FE00
+    rows_3_and_4 =   0x1FE00
     rows_5_and_6 = 0x3FC0000
     if passive == WHITE:
         rows_3_and_4, rows_5_and_6 = rows_5_and_6, rows_3_and_4
@@ -37,11 +37,11 @@ def back(board): # Back Row Bridge
     active = board.active
     passive = board.passive
     if active == BLACK:
-        if self.backward[BLACK] != 0
+        if board.backward[BLACK] != 0:
             return 0
         back_row_bridge = 0x480000000
     else:
-        if self.forward[WHITE] != 0:
+        if board.forward[WHITE] != 0:
             return 0
         back_row_bridge = 0x5
 
@@ -71,7 +71,7 @@ def cntr(board): # Center Control II
         piece can move.
     """
     active = board.active
-    if passive == BLACK:
+    if active == BLACK:
         center_pieces = 0xA619800
     else:
         center_pieces = 0xCC3280
@@ -91,6 +91,54 @@ def deny(board): # Denial of Occupancy
         on the next move a piece occupying this square could be
         captured without exchange.
     """
+    rf = board.right_forward()
+    lf = board.left_forward()
+    rb = board.right_backward()
+    lb = board.left_backward()
+
+    moves =  [0x11 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
+    moves += [0x21 << i for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
+    moves += [0x11 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
+    moves += [0x21 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
+
+    destinations =  [0x10 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
+    destinations += [0x20 << i for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
+    destinations += [0x10 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
+    destinations += [0x20 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
+
+    denials = 0
+
+    for move, dest in zip(moves, destinations):
+        B = board.peek_move(move)
+        active = B.active
+        ms_taking = []
+        ds = []
+        if (B.forward[active] & (dest >> 4)) != 0 and (B.empty & (dest << 4)) != 0:
+            ms_taking.append((-1)*((dest >> 4) | (dest << 4)))
+            ds.append(dest << 4)
+        if (B.forward[active] & (dest >> 5)) != 0 and (B.empty & (dest << 5)) != 0:
+            ms_taking.append(((-1)*(dest >> 5) | (dest << 5)))
+            ds.append(dest << 5)
+        if (B.backward[active] & (dest << 4)) != 0 and (B.empty & (dest >> 4)) != 0:
+            ms_taking.append((-1)*((dest << 4) | (dest >> 4)))
+            ds.append(dest >> 4)
+        if (B.backward[active] & (dest << 5)) != 0 and (B.empty & (dest >> 4)) != 0:
+            ms_taking.append((-1)*((dest << 5) | (dest >> 5)))
+            ds.append(dest >> 5)
+
+        if not ms_taking:
+            continue
+        else:
+            for m, d in zip(ms_taking, ds):
+                C = B.peek_move(m)
+                if C.active == active:
+                    denials += 1
+                    continue
+                if not C.takeable(d):
+                    denials += 1
+
+    return denials
+
 
 def kcent(board): # King Center Control
     """
@@ -98,6 +146,16 @@ def kcent(board): # King Center Control
         squares: 11, 12, 15, 16, 20, 21, 24, and 25 which is occupied
         by a passive king.
     """
+    passive = board.passive
+    if passive == WHITE:
+        center_pieces = 0xA619800
+        passive_kings = board.forward[WHITE]
+    else:
+        center_pieces = 0xCC3280
+        passive_kings = board.backward[BLACK]
+
+    return bin(passive_kings & center_pieces).count("1")
+
 
 def mob(board): # Total Mobility
     """
@@ -106,17 +164,17 @@ def mob(board): # Total Mobility
         disregarding the fact that jump moves may or may not be
         available.
     """
-        rf = board.right_forward()
-        lf = board.left_forward()
-        rb = board.right_backward()
-        lb = board.left_backward()
+    rf = board.right_forward()
+    lf = board.left_forward()
+    rb = board.right_backward()
+    lb = board.left_backward()
 
-        destinations =  [0x10 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
-        destinations += [0x20 << i for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
-        destinations += [0x10 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
-        destinations += [0x20 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
+    destinations =  [0x10 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
+    destinations += [0x20 << i for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
+    destinations += [0x10 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
+    destinations += [0x20 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
 
-        dest_count = bin(reduce(lambda x, y: x|y, destinations)).count("1")
+    return bin(reduce(lambda x, y: x|y, destinations)).count("1")
 
 def mobil(board): # Undenied Mobility
     """
@@ -139,3 +197,10 @@ def thret(board): # Threat
         active piece may be moved and in doing so threaten to capture
         a passive piece on a subsequent move.
     """
+
+if __name__ == '__main__':
+    import checkers
+    B = checkers.CheckerBoard()
+    for _ in [1]*10:
+        B.make_move(B.get_moves()[0])
+    print deny(B)

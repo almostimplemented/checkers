@@ -93,6 +93,51 @@ class CheckerBoard:
         self.jump = 0
         self.active, self.passive = self.passive, self.active
 
+    def peek_move(self, move):
+        """
+            Updates the game state to reflect the effects of the input
+            move.
+
+            A legal move is represented by an integer with exactly two
+            bits turned on: the old position and the new position.
+        """
+        B = self.copy()
+        active = B.active
+        passive = B.passive
+        if move < 0:
+            move *= -1
+            taken_piece = int(1 << sum(i for (i, b) in enumerate(bin(move)[::-1]) if b == '1')/2)
+            B.pieces[passive] ^= taken_piece
+            if B.forward[passive] & taken_piece:
+                B.forward[passive] ^= taken_piece
+            if B.backward[passive] & taken_piece:
+                B.backward[passive] ^= taken_piece
+            B.jump = 1
+
+        B.pieces[active] ^= move
+        if B.forward[active] & move:
+            B.forward[active] ^= move
+        if B.backward[active] & move:
+            B.backward[active] ^= move
+
+        destination = move & B.pieces[active]
+        B.empty = UNUSED_BITS ^ (2**36 - 1) ^ (B.pieces[BLACK] | B.pieces[WHITE])
+
+        if B.jump:
+            B.mandatory_jumps = B.jumps_from(destination)
+            if B.mandatory_jumps:
+                return B
+
+        if active == BLACK and (destination & 0x780000000) != 0:
+            B.backward[BLACK] |= destination
+        elif active == WHITE and (destination & 0xf) != 0:
+            B.forward[WHITE] |= destination
+
+        B.jump = 0
+        B.active, B.passive = B.passive, B.active
+
+        return B
+
     # These methods return an integer whose active bits are those squares
     # that can make the move indicated by the method name.
     def right_forward(self):
@@ -146,7 +191,7 @@ class CheckerBoard:
 
     def get_jumps(self):
         """
-            Returns a list of all possible jumps or None.
+            Returns a list of all possible jumps.
 
             A legal move is represented by an integer with exactly two
             bits turned on: the old position and the new position.
@@ -158,14 +203,15 @@ class CheckerBoard:
         rbj = self.right_backward_jumps()
         lbj = self.left_backward_jumps()
 
+        moves = []
+
         if (rfj | lfj | rbj | lbj) != 0:
-            moves =  [-0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
+            moves +=  [-0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
             moves += [-0x401 << i for (i, bit) in enumerate(bin(lfj)[::-1]) if bit == '1']
             moves += [-0x101 << i - 8 for (i, bit) in enumerate(bin(rbj)[::-1]) if bit == '1']
             moves += [-0x401 << i - 10 for (i, bit) in enumerate(bin(lbj)[::-1]) if bit == '1']
-            return moves
-        else:
-            return None
+
+        return moves
 
     def jumps_from(self, piece):
         """
@@ -194,15 +240,44 @@ class CheckerBoard:
                 rfj = 0
                 lfj = 0
 
+        moves = []
         if (rfj | lfj | rbj | lbj) != 0:
-            moves =  [-0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
+            moves += [-0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
             moves += [-0x401 << i for (i, bit) in enumerate(bin(lfj)[::-1]) if bit == '1']
             moves += [-0x101 << i - 8 for (i, bit) in enumerate(bin(rbj)[::-1]) if bit == '1']
             moves += [-0x401 << i - 10 for (i, bit) in enumerate(bin(lbj)[::-1]) if bit == '1']
-            return moves
-        else:
-            return None
 
+        return moves
+
+    def takeable(self, piece):
+        """
+            Returns true of the passed piece can be taken by the active player.
+        """
+        active = self.active
+        if (self.forward[active] & (piece >> 4)) != 0 and (self.empty & (piece << 4)) != 0:
+            return True
+        if (self.forward[active] & (piece >> 5)) != 0 and (self.empty & (piece << 5)) != 0:
+            return True
+        if (self.backward[active] & (piece << 4)) != 0 and (self.empty & (piece >> 4)) != 0:
+            return True
+        if (self.backward[active] & (piece << 5)) != 0 and (self.empty & (piece >> 4)) != 0:
+            return True
+        return False
+
+    def copy(self):
+        """
+            Returns a new board with the exact same state as the calling object.
+        """
+        B = CheckerBoard()
+        B.active = self.active
+        B.backward = [x for x in self.backward]
+        B.empty = self.empty
+        B.forward = [x for x in self.forward]
+        B.jump = self.jump
+        B.mandatory_jumps = [x for x in self.mandatory_jumps]
+        B.passive = self.passive
+        B.pieces = [x for x in self.pieces]
+        return B
 
     def __str__(self):
         """
