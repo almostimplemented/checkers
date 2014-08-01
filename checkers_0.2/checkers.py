@@ -206,7 +206,7 @@ class CheckerBoard:
         moves = []
 
         if (rfj | lfj | rbj | lbj) != 0:
-            moves +=  [-0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
+            moves += [-0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
             moves += [-0x401 << i for (i, bit) in enumerate(bin(lfj)[::-1]) if bit == '1']
             moves += [-0x101 << i - 8 for (i, bit) in enumerate(bin(rbj)[::-1]) if bit == '1']
             moves += [-0x401 << i - 10 for (i, bit) in enumerate(bin(lbj)[::-1]) if bit == '1']

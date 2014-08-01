@@ -190,6 +190,23 @@ def move(board): # Move
         and if an odd number of pieces are in the move system, defined
         as those vertical files starting with squares 1, 2, 3, and 4.
     """
+    black_men = bin(board.forward[BLACK]).count("1")
+    black_kings = bin(board.backward[BLACK]).count("1")
+    black_score = 2*black_men + 3*black_kings
+    white_men = bin(board.backward[WHITE]).count("1")
+    white_kings = bin(board.forward[WHITE]).count("1")
+    white_score = 2*white_men + 3*white_kings
+
+    if white_score < 24 and black_score == white_score:
+        pieces = pieces[BLACK] | pieces[WHITE]
+        if board.active == BLACK:
+            move_system =  0x783c1e0f
+        else:
+            move_system = 0x783c1e0f0
+        if bin(move_system & pieces).count("1") % 2 == 1:
+            return 1
+
+    return 0
 
 def thret(board): # Threat
     """
@@ -197,6 +214,38 @@ def thret(board): # Threat
         active piece may be moved and in doing so threaten to capture
         a passive piece on a subsequent move.
     """
+    moves = board.get_moves()
+    destinations = map(lambda x: (x ^ board.pieces[board.active]) & x, moves)
+    origins = [x ^ y for (x, y) in zip(moves, destinations)]
+
+    jumps = []
+    for dest, orig in zip(destinations, origins):
+        if board.active == BLACK:
+            rfj = (board.empty >> 8) & (board.pieces[board.passive] >> 4) & dest
+            lfj = (board.empty >> 10) & (board.pieces[board.passive] >> 5) & dest
+            if orig & board.backward[board.active]: # piece is king
+                rbj = (board.empty << 8) & (board.pieces[board.passive] << 4) & dest
+                lbj = (board.empty << 10) & (board.pieces[board.passive] << 5) & dest
+            else:
+                rbj = 0
+                lbj = 0
+        else:
+            rbj = (board.empty << 8) & (board.pieces[board.passive] << 4) & dest
+            lbj = (board.empty << 10) & (board.pieces[board.passive] << 5) & dest
+            if dest & board.forward[board.active]: # piece at square is a king
+                rfj = (board.empty >> 8) & (board.pieces[board.passive] >> 4) & dest
+                lfj = (board.empty >> 10) & (board.pieces[board.passive] >> 5) & dest
+            else:
+                rfj = 0
+                lfj = 0
+
+        if (rfj | lfj | rbj | lbj) != 0:
+            jumps += [-0x101 << i for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
+            jumps += [-0x401 << i for (i, bit) in enumerate(bin(lfj)[::-1]) if bit == '1']
+            jumps += [-0x101 << i - 8 for (i, bit) in enumerate(bin(rbj)[::-1]) if bit == '1']
+            jumps += [-0x401 << i - 10 for (i, bit) in enumerate(bin(lbj)[::-1]) if bit == '1']
+
+    return len(jumps)
 
 if __name__ == '__main__':
     import checkers
