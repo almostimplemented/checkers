@@ -5,6 +5,8 @@
 #
 # Last updated: July 21, 2014
 
+from utils import *
+
 # Constants
 BLACK, WHITE = 0, 1
 VALID_SQUARES = 0x7FBFDFEFF
@@ -78,8 +80,11 @@ def cntr(board): # Center Control II
 
     active_center_count = bin(board.pieces[active] & center_pieces).count("1")
 
+    moves = board.get_moves()
+    if moves[0] < 0:
+        moves = map(lambda x: x*(-1), moves)
     destinations = reduce(lambda x, y: x|y,
-                          [(m ^ (m & board.pieces[active])) for m in board.get_moves()])
+                          [(m & (m ^ board.pieces[active])) for m in moves])
 
     active_near_center_count = bin(destinations & center_pieces).count("1")
 
@@ -103,10 +108,10 @@ def deny(board): # Denial of Occupancy
 
     destinations =  [0x10 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
     destinations += [0x20 << i for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
-    destinations += [0x10 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
-    destinations += [0x20 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
+    destinations += [0x1 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
+    destinations += [0x1 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
 
-    denials = 0
+    denials = []
 
     for move, dest in zip(moves, destinations):
         B = board.peek_move(move)
@@ -117,12 +122,12 @@ def deny(board): # Denial of Occupancy
             ms_taking.append((-1)*((dest >> 4) | (dest << 4)))
             ds.append(dest << 4)
         if (B.forward[active] & (dest >> 5)) != 0 and (B.empty & (dest << 5)) != 0:
-            ms_taking.append(((-1)*(dest >> 5) | (dest << 5)))
+            ms_taking.append((-1)*((dest >> 5) | (dest << 5)))
             ds.append(dest << 5)
         if (B.backward[active] & (dest << 4)) != 0 and (B.empty & (dest >> 4)) != 0:
             ms_taking.append((-1)*((dest << 4) | (dest >> 4)))
             ds.append(dest >> 4)
-        if (B.backward[active] & (dest << 5)) != 0 and (B.empty & (dest >> 4)) != 0:
+        if (B.backward[active] & (dest << 5)) != 0 and (B.empty & (dest >> 5)) != 0:
             ms_taking.append((-1)*((dest << 5) | (dest >> 5)))
             ds.append(dest >> 5)
 
@@ -132,12 +137,14 @@ def deny(board): # Denial of Occupancy
             for m, d in zip(ms_taking, ds):
                 C = B.peek_move(m)
                 if C.active == active:
-                    denials += 1
+                    if not dest in denials:
+                        denials.append(dest)
                     continue
                 if not C.takeable(d):
-                    denials += 1
+                    if not dest in denials:
+                        denials.append(dest)
 
-    return denials
+    return len(denials)
 
 
 def kcent(board): # King Center Control
@@ -171,8 +178,8 @@ def mob(board): # Total Mobility
 
     destinations =  [0x10 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
     destinations += [0x20 << i for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
-    destinations += [0x10 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
-    destinations += [0x20 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
+    destinations += [0x1 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
+    destinations += [0x1 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
 
     return bin(reduce(lambda x, y: x|y, destinations)).count("1")
 
@@ -198,7 +205,7 @@ def move(board): # Move
     white_score = 2*white_men + 3*white_kings
 
     if white_score < 24 and black_score == white_score:
-        pieces = pieces[BLACK] | pieces[WHITE]
+        pieces = board.pieces[BLACK] | board.pieces[WHITE]
         if board.active == BLACK:
             move_system =  0x783c1e0f
         else:
@@ -247,9 +254,114 @@ def thret(board): # Threat
 
     return len(jumps)
 
+def score(board):
+    _adv = adv(board)
+    _back = back(board)
+    _cent = cent(board)
+    _cntr = cntr(board)
+    _deny = deny(board)
+    _kcent = kcent(board)
+    _mob = mob(board)
+    _mobil = _mob - _deny
+    _move = move(board)
+    _thret = thret(board)
+
+    undenied_mobility = 1 if _mobil >= 3 else 0
+    total_mobility = 1 if _mob >= 6 else 0
+    denial_of_occ = 1 if _deny >= 3 else 0
+    _demmo = 1 if denial_of_occ and not total_mobility else 0
+    _mode_2 = 1 if undenied_mobility and not denial_of_occ else 0
+    _mode_3 = 1 if not undenied_mobility and denial_of_occ else 0
+    control = 1 if _cent >= 4 else 0
+    _moc_2 = 1 if not undenied_mobility and control else 0
+    _moc_3 = 1 if undenied_mobility and not control else 0
+    _moc_4 = 1 if not undenied_mobility and not control else 0
+
+    board_score = _moc_2*(-1)*(2**18)  \
+                + _kcent*(2**16)       \
+                + _moc_4*(-1)*(2**14)  \
+                + _mode_3*(-1)*(2**13) \
+                + _demmo*(-1)*(2**11)  \
+                + _move*(2**8)         \
+                + _adv*(-1)*(2**8)     \
+                + _mode_2*(-1)*(2**8)  \
+                + _back*(-1)*(2**6)    \
+                + _cntr*(2**5)         \
+                + _thret*(2**5)        \
+                + _moc_3*(2**4)
+
+    return board_score
+
+
+
+def alphabeta_search(board, d=4, cutoff_test=None, eval_fn=score):
+    """Search game to determine best action; use alpha-beta pruning.
+    This version cuts off search and uses an evaluation function."""
+
+    def max_value(board, alpha, beta, depth):
+        if cutoff_test(board, depth):
+            return eval_fn(board)
+        v = -infinity
+        for move in board.get_moves():
+            active = board.active
+            B = board.peek_move(move)
+            if B.active != active:
+                v = max(v, min_value(B, alpha, beta, depth+1))
+            else:
+                v = max(v, max_value(B, alpha, beta, depth+1))
+            if v >= beta:
+                return v
+            alpha = max(alpha, v)
+        return v
+
+    def min_value(board, alpha, beta, depth):
+        if cutoff_test(board, depth):
+            return eval_fn(board)
+        v = infinity
+        for move in board.get_moves():
+            active = board.active
+            B = board.peek_move(move)
+            if B.active != active:
+                v = min(v, max_value(B, alpha, beta, depth+1))
+            else:
+                v = min(v, min_value(B, alpha, beta, depth+1))
+            if v <= alpha:
+                return v
+            beta = min(beta, v)
+        return v
+
+    # Body of alphabeta_search starts here:
+    # The default test cuts off at depth d or at a terminal state
+    cutoff_test = (cutoff_test or
+                   (lambda board,depth: depth>d or board.is_over()))
+
+    def best(move):
+        B = board.peek_move(move)
+        if B.active != board.active:
+            return min_value(B, -infinity, infinity, 0)
+        else:
+            return max_value(B, -infinity, infinity, 0)
+
+    return argmax(board.get_moves(), best)
+
+
 if __name__ == '__main__':
     import checkers
     B = checkers.CheckerBoard()
-    for _ in [1]*10:
+    for _ in range(10):
         B.make_move(B.get_moves()[0])
-    print deny(B)
+    for _ in range(4):
+        print B
+        print "Active player: " + ("white" if B.active else "black")
+        print "adv(B): " + str(adv(B))
+        print "back(B): " + str(back(B))
+        print "cent(B): " + str(cent(B))
+        print "cntr(B): " + str(cntr(B))
+        print "deny(B): " + str(deny(B))
+        print "kcent(B): " + str(kcent(B))
+        print "mob(B): " + str(mob(B))
+        print "mobil(B): " + str(mobil(B))
+        print "move(B): " + str(move(B))
+        print "thret(B): " + str(thret(B))
+        print ""
+        B.make_move(B.get_moves()[0])

@@ -17,7 +17,7 @@ BLACK, WHITE = 0, 1
 # original bit and the bit either 4 or 5 bits away, in the cases of
 # moving right and left respectively.
 
-UNUSED_BITS = int('0b100000000100000000100000000100000000', 2)
+UNUSED_BITS = 0b100000000100000000100000000100000000
 
 ### CLASSES
 
@@ -260,9 +260,12 @@ class CheckerBoard:
             return True
         if (self.backward[active] & (piece << 4)) != 0 and (self.empty & (piece >> 4)) != 0:
             return True
-        if (self.backward[active] & (piece << 5)) != 0 and (self.empty & (piece >> 4)) != 0:
+        if (self.backward[active] & (piece << 5)) != 0 and (self.empty & (piece >> 5)) != 0:
             return True
         return False
+
+    def is_over(self):
+        return len(self.get_moves()) == 0
 
     def copy(self):
         """
