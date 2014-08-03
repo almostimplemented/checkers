@@ -5,11 +5,13 @@
 #
 # Last updated: July 21, 2014
 
-from utils import *
+import sys
 
 # Constants
 BLACK, WHITE = 0, 1
 VALID_SQUARES = 0x7FBFDFEFF
+
+INFINITY = sys.maxsize
 
 # Feature functions
 def adv(board): # Advancement
@@ -181,6 +183,8 @@ def mob(board): # Total Mobility
     destinations += [0x1 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
     destinations += [0x1 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
 
+    if not destinations:
+        return 0
     return bin(reduce(lambda x, y: x|y, destinations)).count("1")
 
 def mobil(board): # Undenied Mobility
@@ -190,7 +194,7 @@ def mobil(board): # Undenied Mobility
     """
     return mob(board) - deny(board)
 
-def move(board): # Move
+def mov(board): # Move
     """
         The parameter is credited with 1 if pieces are even with a
         total piece count (2 for men, and 3 for kings) of less than 24,
@@ -254,16 +258,37 @@ def thret(board): # Threat
 
     return len(jumps)
 
+def piece_score_diff(board):
+    black_men = bin(board.forward[BLACK]).count("1")
+    black_kings = bin(board.backward[BLACK]).count("1")
+    black_score = 2*black_men + 3*black_kings
+    white_men = bin(board.backward[WHITE]).count("1")
+    white_kings = bin(board.forward[WHITE]).count("1")
+    white_score = 2*white_men + 3*white_kings
+
+    return black_score - white_score if board.passive == BLACK else white_score - black_score
+
+def position_score(board):
+    scores = [0x88000, 0x1904c00, 0x3A0502E0, 0x7C060301F]
+    i = 1
+    total = 0
+    for s in scores:
+        total = i*bin(board.pieces[board.passive] & s).count("1")
+        i += 1
+    return total
+
 def score(board):
-    _adv = adv(board)
-    _back = back(board)
-    _cent = cent(board)
-    _cntr = cntr(board)
-    _deny = deny(board)
+    if board.is_over():
+        return -INFINITY
+    _adv   = adv(board)
+    _back  = back(board)
+    _cent  = cent(board)
+    _cntr  = cntr(board)
+    _deny  = deny(board)
     _kcent = kcent(board)
-    _mob = mob(board)
+    _mob   = mob(board)
     _mobil = _mob - _deny
-    _move = move(board)
+    _mov   = mov(board)
     _thret = thret(board)
 
     undenied_mobility = 1 if _mobil >= 3 else 0
@@ -282,86 +307,97 @@ def score(board):
                 + _moc_4*(-1)*(2**14)  \
                 + _mode_3*(-1)*(2**13) \
                 + _demmo*(-1)*(2**11)  \
-                + _move*(2**8)         \
+                + _mov*(2**8)          \
                 + _adv*(-1)*(2**8)     \
                 + _mode_2*(-1)*(2**8)  \
                 + _back*(-1)*(2**6)    \
                 + _cntr*(2**5)         \
                 + _thret*(2**5)        \
-                + _moc_3*(2**4)
+                + _moc_3*(2**4)        \
+                + piece_score_diff(board)*(2**9) \
+                + position_score(board)*(2**9)
 
     return board_score
 
-
-
-def alphabeta_search(board, d=4, cutoff_test=None, eval_fn=score):
-    """Search game to determine best action; use alpha-beta pruning.
-    This version cuts off search and uses an evaluation function."""
-
-    def max_value(board, alpha, beta, depth):
-        if cutoff_test(board, depth):
-            return eval_fn(board)
-        v = -infinity
-        for move in board.get_moves():
-            active = board.active
-            B = board.peek_move(move)
-            if B.active != active:
-                v = max(v, min_value(B, alpha, beta, depth+1))
-            else:
-                v = max(v, max_value(B, alpha, beta, depth+1))
-            if v >= beta:
-                return v
-            alpha = max(alpha, v)
-        return v
-
-    def min_value(board, alpha, beta, depth):
-        if cutoff_test(board, depth):
-            return eval_fn(board)
-        v = infinity
-        for move in board.get_moves():
-            active = board.active
-            B = board.peek_move(move)
-            if B.active != active:
-                v = min(v, max_value(B, alpha, beta, depth+1))
-            else:
-                v = min(v, min_value(B, alpha, beta, depth+1))
-            if v <= alpha:
-                return v
-            beta = min(beta, v)
-        return v
-
-    # Body of alphabeta_search starts here:
-    # The default test cuts off at depth d or at a terminal state
-    cutoff_test = (cutoff_test or
-                   (lambda board,depth: depth>d or board.is_over()))
-
-    def best(move):
+def negamax(board, depth, alpha, beta, color):
+    if depth == 0 or board.is_over():
+        return score(board)*color
+    best_value = -INFINITY
+    for move in board.get_moves():
         B = board.peek_move(move)
         if B.active != board.active:
-            return min_value(B, -infinity, infinity, 0)
+            val = -negamax(B, depth - 1, -beta, -alpha, -color)
         else:
-            return max_value(B, -infinity, infinity, 0)
+            val = negamax(B, depth, alpha, beta, color)
+        best_value = max(best_value, val)
+        alpha = max(alpha, val)
+        if alpha >= beta:
+            break
+    return best_value
 
-    return argmax(board.get_moves(), best)
+def move_function(board):
+    def search(move):
+        B = board.peek_move(move)
+        if B.active == board.active:
+            return negamax(B, 5, -INFINITY, INFINITY, 1)
+        else:
+            return negamax(B, 5, -INFINITY, INFINITY, -1)
+
+    return max(board.get_moves(), key=search)
+    #pairs = zip(zip(board.get_moves(), get_move_strings(board)),
+                #map(search, board.get_moves()))
+    #print "Moves and ratings"
+    #for pair in pairs:
+        #print pair[0][1] + " with a rating of " + str(pair[1])
+    #print ""
+    #best_pair = max(pairs, key=lambda x: x[1])
+    #return best_pair[0][0]
+
+def get_move_strings(board):
+    rfj = board.right_forward_jumps()
+    lfj = board.left_forward_jumps()
+    rbj = board.right_backward_jumps()
+    lbj = board.left_backward_jumps()
+
+    if (rfj | lfj | rbj | lbj) != 0:
+        rfj = [(1 + i - i//9, 1 + (i + 8) - (i + 8)//9)
+                    for (i, bit) in enumerate(bin(rfj)[::-1]) if bit == '1']
+        lfj = [(1 + i - i//9, 1 + (i + 10) - (i + 8)//9)
+                    for (i, bit) in enumerate(bin(lfj)[::-1]) if bit == '1']
+        rbj = [(1 + i - i//9, 1 + (i - 8) - (i - 8)//9)
+                    for (i, bit) in enumerate(bin(rbj)[::-1]) if bit ==  '1']
+        lbj = [(1 + i - i//9, 1 + (i - 10) - (i - 10)//9)
+                    for (i, bit) in enumerate(bin(lbj)[::-1]) if bit == '1']
+
+        if board.active == BLACK:
+            regular_moves = ["%i to %i" % (orig, dest) for (orig, dest) in rfj + lfj]
+            reverse_moves = ["%i to %i" % (orig, dest) for (orig, dest) in rbj + lbj]
+            return regular_moves + reverse_moves
+        else:
+            reverse_moves = ["%i to %i" % (orig, dest) for (orig, dest) in rfj + lfj]
+            regular_moves = ["%i to %i" % (orig, dest) for (orig, dest) in rbj + lbj]
+            return reverse_moves + regular_moves
 
 
-if __name__ == '__main__':
-    import checkers
-    B = checkers.CheckerBoard()
-    for _ in range(10):
-        B.make_move(B.get_moves()[0])
-    for _ in range(4):
-        print B
-        print "Active player: " + ("white" if B.active else "black")
-        print "adv(B): " + str(adv(B))
-        print "back(B): " + str(back(B))
-        print "cent(B): " + str(cent(B))
-        print "cntr(B): " + str(cntr(B))
-        print "deny(B): " + str(deny(B))
-        print "kcent(B): " + str(kcent(B))
-        print "mob(B): " + str(mob(B))
-        print "mobil(B): " + str(mobil(B))
-        print "move(B): " + str(move(B))
-        print "thret(B): " + str(thret(B))
-        print ""
-        B.make_move(B.get_moves()[0])
+    rf = board.right_forward()
+    lf = board.left_forward()
+    rb = board.right_backward()
+    lb = board.left_backward()
+
+    rf = [(1 + i - i//9, 1 + (i + 4) - (i + 4)//9)
+                for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
+    lf = [(1 + i - i//9, 1 + (i + 5) - (i + 5)//9)
+                for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
+    rb = [(1 + i - i//9, 1 + (i - 4) - (i - 4)//9)
+                for (i, bit) in enumerate(bin(rb)[::-1]) if bit ==  '1']
+    lb = [(1 + i - i//9, 1 + (i - 5) - (i - 5)//9)
+                for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
+
+    if board.active == BLACK:
+        regular_moves = ["%i to %i" % (orig, dest) for (orig, dest) in rf + lf]
+        reverse_moves = ["%i to %i" % (orig, dest) for (orig, dest) in rb + lb]
+        return regular_moves + reverse_moves
+    else:
+        regular_moves = ["%i to %i" % (orig, dest) for (orig, dest) in rb + lb]
+        reverse_moves = ["%i to %i" % (orig, dest) for (orig, dest) in rf + lf]
+        return reverse_moves + regular_moves
