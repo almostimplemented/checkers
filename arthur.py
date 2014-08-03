@@ -335,13 +335,13 @@ def negamax(board, depth, alpha, beta, color):
             break
     return best_value
 
-def move_function(board):
+def move_function(board, depth=5):
     def search(move):
         B = board.peek_move(move)
         if B.active == board.active:
-            return negamax(B, 5, -INFINITY, INFINITY, 1)
+            return negamax(B, depth, -INFINITY, INFINITY, 1)
         else:
-            return negamax(B, 5, -INFINITY, INFINITY, -1)
+            return negamax(B, depth, -INFINITY, INFINITY, -1)
 
     return max(board.get_moves(), key=search)
     #pairs = zip(zip(board.get_moves(), get_move_strings(board)),

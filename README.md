@@ -9,7 +9,7 @@ Checkers AI: an ode to Arthur Samuel
  `agent.py`
  
      This file contains the implementation of the AI CheckersAgent class. All that is required
-     of a CheckersAgent is that it have a function doMove() that takes in a game state and
+     of a CheckersAgent is that it have a function move_function() that takes in a game state and
      returns a legal move.
  
  `arthur.py`
