@@ -1,4 +1,4 @@
-Checkers AI: an ode to Arthur Samuel
+Checkers AI: a look at Arthur Samuel's ideas
 =====================================
  
  `checkers.py`

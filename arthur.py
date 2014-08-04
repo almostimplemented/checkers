@@ -258,7 +258,7 @@ def thret(board): # Threat
 
     return len(jumps)
 
-def piece_score_diff(board):
+def piece_score_diff(board, player):
     black_men = bin(board.forward[BLACK]).count("1")
     black_kings = bin(board.backward[BLACK]).count("1")
     black_score = 2*black_men + 3*black_kings
@@ -266,38 +266,41 @@ def piece_score_diff(board):
     white_kings = bin(board.forward[WHITE]).count("1")
     white_score = 2*white_men + 3*white_kings
 
-    return black_score - white_score if board.passive == BLACK else white_score - black_score
+    return black_score - white_score if player == BLACK else white_score - black_score
 
-def position_score(board):
+def position_score(board, player):
     scores = [0x88000, 0x1904c00, 0x3A0502E0, 0x7C060301F]
     i = 1
     total = 0
     for s in scores:
-        total = i*bin(board.pieces[board.passive] & s).count("1")
+        total = i*bin(board.pieces[player] & s).count("1")
         i += 1
     return total
 
-def score(board):
-    if board.is_over():
+def score(board_old, board_new):
+    if board_old.is_over():
         return -INFINITY
-    _adv   = adv(board)
-    _back  = back(board)
-    _cent  = cent(board)
-    _cntr  = cntr(board)
-    _deny  = deny(board)
-    _kcent = kcent(board)
-    _mob   = mob(board)
+    if board_new.is_over():
+        return INFINITY
+    _adv   = adv(board_new) - adv(board_old)
+    _back  = adv(board_new) - back(board_old)
+    _cent  = cent(board_new) - cent(board_old)
+    _cntr  = cntr(board_new) - cntr(board_old)
+    _deny  = deny(board_new) - deny(board_old)
+    _kcent = kcent(board_new) - kcent(board_old)
+    _mob   = mob(board_new) - mob(board_old)
     _mobil = _mob - _deny
-    _mov   = mov(board)
-    _thret = thret(board)
+    _mov   = mov(board_new) - mov(board_old)
+    _thret = thret(board_new) - thret(board_old)
 
-    undenied_mobility = 1 if _mobil >= 3 else 0
-    total_mobility = 1 if _mob >= 6 else 0
-    denial_of_occ = 1 if _deny >= 3 else 0
+    undenied_mobility = 1 if _mobil > 0 else 0
+    total_mobility = 1 if _mob > 0 else 0
+    denial_of_occ = 1 if _deny > 0 else 0
+    control = 1 if _cent > 0 else 0
+
     _demmo = 1 if denial_of_occ and not total_mobility else 0
     _mode_2 = 1 if undenied_mobility and not denial_of_occ else 0
     _mode_3 = 1 if not undenied_mobility and denial_of_occ else 0
-    control = 1 if _cent >= 4 else 0
     _moc_2 = 1 if not undenied_mobility and control else 0
     _moc_3 = 1 if undenied_mobility and not control else 0
     _moc_4 = 1 if not undenied_mobility and not control else 0
@@ -314,34 +317,34 @@ def score(board):
                 + _cntr*(2**5)         \
                 + _thret*(2**5)        \
                 + _moc_3*(2**4)        \
-                + piece_score_diff(board)*(2**9) \
-                + position_score(board)*(2**9)
+                + piece_score_diff(board_new, board_old.active)*(2**20) \
+                + position_score(board_new, board_old.active)*(2**14)
 
     return board_score
 
-def negamax(board, depth, alpha, beta, color):
-    if depth == 0 or board.is_over():
-        return score(board)*color
+def negamax(board_old, board_new, depth, alpha, beta, color):
+    if depth == 0 or board_new.is_over():
+        return score(board_old, board_new)*color
     best_value = -INFINITY
-    for move in board.get_moves():
-        B = board.peek_move(move)
-        if B.active != board.active:
-            val = -negamax(B, depth - 1, -beta, -alpha, -color)
+    for move in board_new.get_moves():
+        B = board_new.peek_move(move)
+        if B.active != board_new.active:
+            val = -negamax(board_new, B, depth - 1, -beta, -alpha, -color)
         else:
-            val = negamax(B, depth, alpha, beta, color)
+            val = negamax(board_new, B, depth, alpha, beta, color)
         best_value = max(best_value, val)
         alpha = max(alpha, val)
         if alpha >= beta:
             break
     return best_value
 
-def move_function(board, depth=5):
+def move_function(board, depth=7):
     def search(move):
         B = board.peek_move(move)
         if B.active == board.active:
-            return negamax(B, depth, -INFINITY, INFINITY, 1)
+            return negamax(board, B, depth, -INFINITY, INFINITY, 1)
         else:
-            return negamax(B, depth, -INFINITY, INFINITY, -1)
+            return negamax(board, B, depth, -INFINITY, INFINITY, -1)
 
     return max(board.get_moves(), key=search)
     #pairs = zip(zip(board.get_moves(), get_move_strings(board)),
