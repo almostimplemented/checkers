@@ -5,7 +5,7 @@ Usage
 ---
 Download project. Navigate to directory. Do `python game.py`, and type in `arthur` when prompted for agent module.
 
-(Note: to adjust how long the computer player "thinks" about its next move, you can vary the defautl depth parameter of the look ahead search. Go into `arthur.py` and change `depth=x` parameter of the function `move_function`.)
+(Note: to adjust how long the computer player "thinks" about its next move, you can vary the default depth parameter of the look ahead search. Go into `arthur.py` and change `depth=x` parameter of the function `move_function`.)
 
 Files
 ---
