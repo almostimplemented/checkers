@@ -100,6 +100,7 @@ def main():
         turn = 0
         B = checkers.CheckerBoard()
         current_player = B.active
+        print "Black moves first."
         while not B.is_over():
             print B
             if turn % 2 == choice:
