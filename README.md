@@ -1,5 +1,13 @@
 Checkers AI: a look at Arthur Samuel's ideas
 =====================================
+
+Usage
+---
+Download project. Navigate to directory. Do `python game.py`, and type in `arthur` when prompted for agent module.
+
+Files
+---
+
  
  `checkers.py`
  
